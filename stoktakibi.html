@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stok & Sipariş Takip</title>
+<style>
+body { font-family:'Segoe UI',sans-serif; margin:0; padding:12px; background:#f9f9f9; color:#333; }
+.panel { background:#fff; border-radius:10px; margin-bottom:14px; box-shadow:0 2px 6px rgba(0,0,0,0.08); padding:12px; }
+.panel h3 { margin:6px 0; font-size:15px; color:#1976d2; }
+.item { display:flex; align-items:center; justify-content: space-between; gap:10px; margin-bottom:10px; padding:6px 8px; border-radius:8px; background:#fdfdfd; }
+.name { flex:1; font-size:13px; }
+.badge { background:#eee; padding:2px 6px; border-radius:6px; font-size:11px; min-width:55px; text-align:center; }
+.badge.critical { background:#e53935; color:white; }
+input { width:45px; padding:4px; border:1px solid #ccc; border-radius:4px; text-align:center; font-size:12px;}
+button { padding:10px; font-size:14px; border:none; cursor:pointer; transition:0.2s; color:white; border-radius:20px; background: linear-gradient(135deg, #42a5f5, #1976d2); box-shadow: 0 2px 4px rgba(0,0,0,0.2); display:flex; align-items:center; justify-content:center; gap:6px;}
+button:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.25); }
+.top { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap: wrap; }
+#total-label { font-size:14px; }
+#total { font-weight:bold; font-size:18px; color:#388e3c; min-width:60px; text-align:right; }
+.button-group { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+.button-group button { flex:1; font-size:15px; padding:12px;}
+#resetBtn { font-size:12px; padding:8px; }
+/* Modal */
+.modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; z-index:1000; }
+.modal-content { background:#fff; width:90%; max-width:600px; max-height:90%; overflow-y:auto; border-radius:10px; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,0.2); position:relative; }
+.modal-content h2 { margin-top:0; color:#000; } 
+.close { position:absolute; top:10px; right:12px; cursor:pointer; font-size:18px; font-weight:bold; }
+/* Sipariş detayları */
+.order-card { background:#f7f7f7; border-radius:8px; margin-bottom:10px; padding:10px; color:#333; font-size:13px; }
+.order-card h4 { margin:0 0 6px 0; font-size:13px; }
+.order-card ul { padding-left:20px; margin:4px 0; font-size:13px; }
+/* Sağ taraf tamamlandı */
+.order-actions { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+/* Bold ve renkli başlıklar */
+.order-label { font-weight:bold; color:#1976d2; }
+.order-value { color:#333; font-weight:normal; }
+/* Gönder modal */
+.input-modal-content { background:#fff; width:90%; max-width:400px; border-radius:10px; padding:16px; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:1500; box-shadow:0 2px 10px rgba(0,0,0,0.3); display:none; }
+.input-modal-content h3 { margin-top:0; font-size:16px; }
+.input-modal-content label { display:block; margin-top:8px; font-size:13px; font-weight:bold; color:#1976d2; }
+.input-modal-content input { width:100%; padding:6px; margin-top:4px; border:1px solid #ccc; border-radius:6px; }
+.input-modal-content button { margin-top:10px; width:100%; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+    <div id="total-label">Sepet Toplamı: <span id="total">0</span></div>
+    <button id="resetBtn" onclick="resetAll()">🧹 Temizle</button>
+  </div>
+</div>
+
+<div id="list"></div>
+
+<div class="button-group">
+  <button onclick="prepareSend()">📨 Gönder</button>
+  <button onclick="toggleSepet()">🛒 Sepet</button>
+</div>
+
+<div id="sepetModal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="toggleSepet()">&times;</span>
+    <h2>Sepet</h2>
+    <div id="historySection"></div>
+  </div>
+</div>
+
+<div id="sendModal" class="input-modal-content">
+  <h3>Gönderilecek Bilgiler</h3>
+  <label>Oyuncu Etiketi:</label>
+  <input type="text" id="playerName">
+  <label>Çiftlik Adı:</label>
+  <input type="text" id="farmName">
+  <button onclick="sendAll()">Gönder</button>
+</div>
+
+<script>
+const START=50;
+const data={
+"Tatlılar":["Affogato","Bonbon","Fudge","Karamelli Elma","Muzlu Tatlı","Rulo Pasta","Süslü Pasta","Meyveli Pasta","Ç.Meyveli Turta","Çikolatalı Turta","Mantarlı Turta","Şeftalili Turta","Yaban Mersinli Kek","Y.Mersinli Chesecake","Zencefilli Kurabiye","Çıtır Donut","Kremalı Donut","Sade Donut","Şekerli Donut"],
+"Reçeller":["Ahududu Reçeli","Böğürtlen Reçeli","Ç.Meyve Reçeli","Çilek Reçeli","Elma Reçeli","Erik Reçeli","Şeftali Reçeli","Üzüm Reçeli","Vişne Reçeli","Y.Mersin Reçeli","Şeftali Reçeli"],
+"Ana Yemek":["Bahar Omlet","Baharatlı Balık","Baharatlı Makarna","Balık Burger","Balık Şiş","Balıklı Tako","Biber Dolması","Çiğ Çin Böreği","Falafel","Gnocchi","Humus","Istakoz","İstakozlu Makarna","Kimçi","Konserve Balık","Közlenmiş Patlıcan","Parmesanlı Patlıcan","Pastırmalı Kızartma","Quesadilla","Sebzeli Lazanya","Sosisli Sandviç","Tako","Suşi","Yumurtalı Suşi","Pastırmalı Omlet","Patatesli Omlet","Pirinçli Omlet","Renkli Omlet"],
+"Dondurmalar":["Çikolatalı Dondurma","Çilekli Dondurma","Naneli Dondurma","Susamlı Dondurma","Vanilyalı Dondurma","Şeftalili Dondurma"],
+"Çorbalar":["Balık Çorbası","Balkabaklı Çorba","Brokoli Çorbası","Dolma Biber Çorbası","Domates Çorbası","Erişte Çorbası","İstakoz Çorbası","Kuşkonmaz Çorbası","Lahana Çorbası","Patates Çorbası","Soğan Çorbası"],
+"Sandviç":["Ballı Tost","Keçi Peynirli Tost","Pastırmalı Tost","Salatalıklı Sandviç","Soğanlı Sandviç","Yumurtalı Sandviç"],
+"Salatalar":["D.Ürünleri Salatası","Et Salatası","Feta Salatası","Lahana Salatası","Makarna Salatası","Meyve Salatası","Pancar Salatası","Yaz Salatası"],
+"Bakım & Diğer":["Bal","Bal Sabunu","Bal Mumu","Ballı Yer Fıstığı","Peeling Sabunu","Limon Kreması","Limon Losyonu","Zeytinyağı","Zeytinyağı Kreması","Tüy","Yastık","Susam Helvası","Soslu Makarna","Soya Sosu","Domates Sosu","Muzlu Ekmek","Muzlu Pankek","Naço","Salsa","Sarmısaklı Ekmek"]}
+;
+
+let state=JSON.parse(localStorage.getItem("STOK_STATE"))||{};
+let total=Number(localStorage.getItem("STOK_TOTAL"))||0;
+let history=JSON.parse(localStorage.getItem("ORDER_HISTORY"))||[];
+
+function build(){
+  const list=document.getElementById("list"); list.innerHTML="";
+  for(const cat in data){
+    const panel=document.createElement("div"); panel.className="panel";
+    panel.innerHTML=`<h3>${cat}</h3>`; list.appendChild(panel);
+    data[cat].forEach(name=>{
+      if(!state[name]) state[name]={remain:START,sold:0};
+      const row=document.createElement("div"); row.className="item";
+      const badgeClass=state[name].remain<=5?"badge critical":"badge";
+      row.innerHTML=`<div class="name">${name}</div><div class="${badgeClass}" id="r-${name}">Kalan: ${state[name].remain}</div><input type="number" min="0" id="i-${name}" oninput="liveUpdate('${name}')" placeholder="0" ${state[name].remain===0?'disabled':''}>`;
+      panel.appendChild(row);
+    });
+  }
+  updateTotal();
+}
+
+function liveUpdate(name){
+  const inp=document.getElementById("i-"+name);
+  let val=Number(inp.value||0);
+  if(val>state[name].remain){
+    alert(`${name} için stok miktarını aştınız, lütfen sipariş miktarını kontrol ediniz.`);
+    inp.value=state[name].remain;
+    val=state[name].remain;
+  }
+  document.getElementById("r-"+name).textContent="Kalan: "+(state[name].remain-val);
+  updateTotal();
+}
+
+function updateTotal(){
+  let sum=0;
+  for(const cat in data){ data[cat].forEach(n=>{ sum+=Number(document.getElementById("i-"+n).value||0); }); }
+  document.getElementById("total").textContent=sum;
+}
+
+function prepareSend(){
+  let hasProduct=false;
+  for(const cat in data){ data[cat].forEach(n=>{ if(Number(document.getElementById("i-"+n).value||0)>0) hasProduct=true; }); }
+  if(!hasProduct){ alert("Sipariş için ürün seçmediniz. Lütfen ürünleri seçtikten sonra bilgileri gönderiniz."); return; }
+  document.getElementById("sendModal").style.display="block";
+}
+
+function sendAll(){
+  const player=document.getElementById("playerName").value.trim();
+  const farm=document.getElementById("farmName").value.trim();
+  if(!player||!farm){ alert("Oyuncu ve Çiftlik adını giriniz."); return; }
+  const orderItems=[];
+  for(const cat in data){
+    data[cat].forEach(name=>{
+      const val=Number(document.getElementById("i-"+name).value||0);
+      if(val>0) orderItems.push({name,qty:val});
+      if(val>state[name].remain){ alert("Stokta yetersiz: "+name); return; }
+    });
+  }
+  if(orderItems.length===0){ alert("Sipariş için ürün seçmediniz."); return;}
+  const now=new Date();
+  const tarih=now.toLocaleDateString("tr-TR"); const saat=now.toLocaleTimeString("tr-TR");
+  orderItems.forEach(item=>{ state[item.name].remain-=item.qty; state[item.name].sold+=item.qty; document.getElementById("i-"+item.name).value=""; });
+  total+=orderItems.reduce((a,b)=>a+b.qty,0);
+  history.push({player,farm,tarih,saat,items:orderItems,done:false});
+  saveState(); build(); renderSepet(); document.getElementById("sendModal").style.display="none";
+  alert("Siparişiniz başarıyla tamamlanmıştır.");
+  notify("Yeni Sipariş!", `${player} adlı kullanıcı sipariş verdi.`);
+}
+
+function resetAll(){
+  if(!confirm("Tüm veriler silinsin mi?")) return;
+  state={}; history=[]; total=0; localStorage.removeItem("STOK_STATE"); localStorage.removeItem("ORDER_HISTORY"); localStorage.removeItem("STOK_TOTAL"); build(); renderSepet();
+}
+
+function saveState(){ localStorage.setItem("STOK_STATE",JSON.stringify(state)); localStorage.setItem("ORDER_HISTORY",JSON.stringify(history)); localStorage.setItem("STOK_TOTAL",total); }
+
+function toggleSepet(){ const modal=document.getElementById("sepetModal"); modal.style.display=(modal.style.display==="flex")?"none":"flex"; if(modal.style.display==="flex") renderSepet(); }
+
+function renderSepet(){
+  const histDiv=document.getElementById("historySection"); histDiv.innerHTML="";
+  if(history.length===0){ histDiv.innerHTML="<p>Henüz sipariş yok.</p>"; return; }
+  history.forEach((ord,idx)=>{
+    const card=document.createElement("div"); card.className="order-card";
+    card.innerHTML=`
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div><span class="order-label">Oyuncu Etiketi:</span> <span class="order-value">${ord.player}</span></div>
+          <div><span class="order-label">Çiftlik Adı:</span> <span class="order-value">${ord.farm}</span></div>
+          <div><span class="order-label">Tarih:</span> <span class="order-value">${ord.tarih} ${ord.saat}</span></div>
+          <div><span class="order-label">Ürünler:</span></div>
+          <ul>${ord.items.map(it=>`<li>${it.name} — ${it.qty} adet</li>`).join('')}</ul>
+        </div>
+        <div class="order-actions">
+          <label style="color:${ord.done?'green':'#000'}">
+            <input type="checkbox" ${ord.done?'checked':''} onchange="markDone(${idx},this)"> Tamamlandı
+          </label>
+        </div>
+      </div>
+    `;
+    histDiv.appendChild(card);
+  });
+}
+
+function markDone(idx,checkbox){ 
+  history[idx].done=checkbox.checked; 
+  const label=checkbox.parentElement;
+  label.style.color=checkbox.checked?"green":"#000";
+  saveState(); 
+}
+
+function notify(title,msg){
+  if("Notification" in window){
+    if(Notification.permission==="granted"){ new Notification(title,{body:msg}); }
+    else if(Notification.permission!=="denied"){ Notification.requestPermission().then(p=>{ if(p==="granted") new Notification(title,{body:msg}); }); }
+  }
+}
+
+build();
+</script>
+</body>
+</html>
