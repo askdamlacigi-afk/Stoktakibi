@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sipariş ve Admin Paneli</title>
+<style>
+body {
+    margin:0; padding:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:#f0f2f5;
+}
+.header {
+    background:#fff; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #ddd;
+    box-shadow:0 2px 5px rgba(0,0,0,0.05);
+}
+.header-left {
+    display:flex; flex-direction:column;
+}
+.total {
+    font-size:18px; font-weight:600; color:#1b8bb4; line-height:1.2;
+}
+.small-info {
+    font-size:12px; color:#555; margin-top:2px;
+}
+.icons {
+    display:flex; align-items:center; gap:15px; font-size:24px;
+}
+.icons span {
+    cursor:pointer;
+    transition: transform 0.2s, filter 0.2s;
+}
+.icons span:hover { transform: scale(1.2); }
+
+.search-bar {
+    padding: 0 20px; margin:10px 0; background:#f0f0f0;
+}
+.search-bar input {
+    width: 100%; padding: 12px 20px; border-radius:25px; border: none; font-size: 16px;
+    background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); box-sizing: border-box;
+}
+
+/* Liste ve ürün satırları kompakt */
+.list { 
+    padding:0 10px; 
+    height:calc(100vh - 140px); 
+    overflow-y:auto; 
+    scrollbar-width: thin;
+    scrollbar-color: #aaa transparent;
+}
+.list::-webkit-scrollbar {
+    width:6px;
+}
+.list::-webkit-scrollbar-track { background: transparent; }
+.list::-webkit-scrollbar-thumb { background-color: #aaa; border-radius:3px; }
+
+.list-item {
+    background:#fff; 
+    padding:4px 10px; 
+    border-radius:8px; 
+    margin-bottom:4px; 
+    display:flex; justify-content:space-between; align-items:center; 
+    font-size:13px; 
+    box-shadow:0 1px 2px rgba(0,0,0,0.06);
+}
+.product-info { display:flex; align-items:center; gap:6px; }
+.product-name { font-weight:500; color:#333; font-size:13px; }
+.stock { font-size:10px; color:#888; }
+
+.order-input {
+    width:50px; padding:3px; font-size:12px; border-radius:6px; border:1px solid #ccc; text-align:center;
+}
+
+.cart-modal, .admin-modal {
+    display:none; position: fixed; top:50%; left:50%; transform: translate(-50%, -50%);
+    width: 90%; max-width:400px; max-height:80%; background:#fff; box-shadow:0 0 15px rgba(0,0,0,0.3);
+    border-radius:12px; padding:15px; overflow-y:auto; z-index:10;
+}
+.cart-modal.active, .admin-modal.active { display:block; }
+
+.cart-overlay, .admin-overlay {
+    display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.3); z-index:9;
+}
+.cart-overlay.active, .admin-overlay.active { display:block; }
+
+.cart-header, .admin-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.cart-header-left, .admin-header-left { display:flex; flex-direction:column; }
+.cart-header strong, .admin-header strong { font-size:16px; }
+.cart-stats { font-size:12px; color:#555; }
+.close-cart, .close-admin { cursor:pointer; font-size:18px; color:#ff4d4f; font-weight:bold; border:none; background:none; }
+
+.admin-body { display:flex; flex-direction:column; gap:10px; }
+.admin-body input, .admin-body select { padding:8px; border-radius:8px; border:1px solid #ccc; }
+.admin-body button { padding:8px; border:none; border-radius:8px; background:#1b8bb4; color:#fff; cursor:pointer; }
+
+.cart-buttons { display:flex; gap:10px; margin-top:15px; }
+.cart-buttons button { flex:1; padding:10px; border:none; border-radius:8px; color:#fff; cursor:pointer; font-weight:500; }
+#whatsappBtn { background:#25D366; }
+#messengerBtn { background:#0078FF; }
+#copyBtn { background:#555; }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-left">
+        <span class="total" id="totalProducts">Sipariş Toplamı: 0</span>
+        <span class="small-info" id="orderInfo">0 çeşit sipariş</span>
+        <span class="small-info" id="listInfo">0 çeşit ürün, 0 adet stokta</span>
+    </div>
+    <div class="icons">
+        <span id="cartBtn" title="Sepeti Gör">🛒</span>
+        <span id="clearBtn" title="Temizle">🗑️</span>
+        <span id="adminBtn" title="Admin Paneli">👨🏽‍🔧</span>
+    </div>
+</div>
+
+<div class="search-bar">
+    <input type="text" placeholder="Ürün ara..." id="searchInput">
+</div>
+
+<div class="list" id="productList"></div>
+
+<div class="cart-overlay" id="cartOverlay"></div>
+<div class="cart-modal" id="cartModal">
+    <div class="cart-header">
+        <div class="cart-header-left">
+            <strong>Sepet</strong>
+            <span class="cart-stats" id="cartTotalInfo">Toplam: 0 adet | 0 çeşit</span>
+        </div>
+        <button class="close-cart" id="closeCartBtn">×</button>
+    </div>
+    <div id="cartItems"></div>
+    <div class="cart-buttons">
+        <button id="whatsappBtn">WhatsApp</button>
+        <button id="messengerBtn">Messenger</button>
+        <button id="copyBtn">Siparişi Kopyala</button>
+    </div>
+</div>
+
+<div class="admin-overlay" id="adminOverlay"></div>
+<div class="admin-modal" id="adminModal">
+    <div class="admin-header">
+        <strong>Admin Paneli</strong>
+        <button class="close-admin" id="closeAdminBtn">×</button>
+    </div>
+    <div class="admin-body" id="adminBody">
+        <label>Şifre:</label>
+        <input type="password" id="adminPassword" placeholder="Şifre girin">
+        <button id="adminLoginBtn">Giriş</button>
+    </div>
+</div>
+
+<script>
+// Veriler ve fonksiyonlar (önceki kodun aynısı)
+let adminPass = "1234";
+let productNames = [
+"Affogato","Ahududu Reçeli","Bahar Omlet","Baharatlı Balık","Baharatlı Makarna","Bal","Bal Mumu","Bal Sabunu",
+"Balık Burger","Balık Çorbası","Balık Şiş","Balıklı Tako","Balkabaklı Çorba","Ballı Tost","Ballı Yer Fıstığı",
+"Biber Dolması","Bonbon","Böğürtlen Reçeli","Brokoli Çorbası","Brokolili Makarna","Büyük Suşi","Ç.Meyve Reçeli",
+"Ç.Meyveli Turta","Çıtır Donut","Çiğ Çin Böreği","Çikolata","Çikolatalı Dondurma","Çikolatalı Turta","Çilek Reçeli",
+"Çilekli Dondurma","D.Ürünleri Salatası","Dolgulu Biber","Dolma Biber Çorbası","Domates Çorbası","Domates Sosu",
+"Elma Reçeli","Erik Reçeli","Erişte Çorbası","Et Salatası","Falafel","Feta Salatası","Fıstıklı Erişte","Fudge",
+"Gnocchi","Humus","Istakoz","İstakoz Çorbası","İstakozlu Makarna","Karamelli Elma","Keçi Peynirli Tost","Kimçi",
+"Konserve Balık","Közlenmiş Patlıcan","Kremalı Donut","Kuşkonmaz Çorbası","Lahana Çorbası","Lahana Salatası",
+"Limon Kreması","Limon Losyonu","Makarna Salatası","Mantarlı Turta","Marmelat","Mayonez","Meyve Salatası",
+"Meyveli Pasta","Muzlu Ekmek","Muzlu Pankek","Muzlu Tatlı","Naço","Naneli Dondurma","Pancar Salatası",
+"Parmesanlı Patlıcan","Pastırmalı Fondü","Pastırmalı Kızartma","Pastırmalı Omlet","Pastırmalı Tost","Patates Çorbası",
+"Patatesli Omlet","Peeling Sabunu","Peynir Fondü","Pirinçli Omlet","Portakal Püresi","Quesadilla","Renkli Omlet",
+"Rulo Pasta","Sade Donut","Salatalıklı Sandviç","Salsa","Sarmısaklı Ekmek","Sebzeli Lazanya","Sebzeli Simit",
+"Soğan Çorbası","Soğanlı Sandviç","Sosisli Sandviç","Soslu Makarna","Soya Sosu","Susam Helvası","Susamlı Dondurma",
+"Suşi","Süslü Pasta","Şeftali Reçeli","Şeftalili Dondurma","Şeftalili Turta","Şekerli Donut","Tako","Turşu","Tüy",
+"Üzüm Reçeli","Vanilyalı Dondurma","Vişne Reçeli","Y.Mersin Reçeli","Y.Mersinli Chesecake","Yaban Mersinli Kek",
+"Yastık","Yaz Salatası","Yumurtalı Sandviç","Yumurtalı Suşi","Zencefilli Kurabiye","Zeytinyağı","Zeytinyağı Kreması"
+];
+let products = productNames.map(name => ({name, stock:100}));
+let orders = {};
+
+const productList = document.getElementById("productList");
+const totalDisplay = document.getElementById("totalProducts");
+const orderInfo = document.getElementById("orderInfo");
+const listInfo = document.getElementById("listInfo");
+const searchInput = document.getElementById("searchInput");
+
+const cartModal = document.getElementById("cartModal");
+const cartOverlay = document.getElementById("cartOverlay");
+const cartItems = document.getElementById("cartItems");
+const cartBtn = document.getElementById("cartBtn");
+const closeCartBtn = document.getElementById("closeCartBtn");
+const clearBtn = document.getElementById("clearBtn");
+
+const adminBtn = document.getElementById("adminBtn");
+const adminModal = document.getElementById("adminModal");
+const adminOverlay = document.getElementById("adminOverlay");
+const closeAdminBtn = document.getElementById("closeAdminBtn");
+const adminLoginBtn = document.getElementById("adminLoginBtn");
+const adminPasswordInput = document.getElementById("adminPassword");
+const adminBody = document.getElementById("adminBody");
+
+const whatsappBtn = document.getElementById("whatsappBtn");
+const messengerBtn = document.getElementById("messengerBtn");
+const copyBtn = document.getElementById("copyBtn");
+
+// Fonksiyonlar (öncekilerin tamamı aynı şekilde burada yer alıyor)
+function createProductItem(product){
+    const item = document.createElement("div");
+    item.className = "list-item";
+
+    const infoDiv = document.createElement("div");
+    infoDiv.className = "product-info";
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "product-name";
+    nameSpan.textContent = product.name;
+
+    const stockSpan = document.createElement("span");
+    stockSpan.className = "stock";
+    stockSpan.textContent = ` (Stok: ${product.stock})`;
+
+    infoDiv.appendChild(nameSpan);
+    infoDiv.appendChild(stockSpan);
+
+    const input = document.createElement("input");
+    input.type="text";
+    input.className="order-input";
+    input.value = orders[product.name] || "0";
+    input.dataset.name = product.name;
+
+    input.addEventListener("focus", e=>{ if(e.target.value==="0") e.target.value=""; });
+    input.addEventListener("input", e=>{ e.target.value=e.target.value.replace(/[^0-9]/g,''); });
+    input.addEventListener("change", e=>{
+        let value = parseInt(e.target.value)||0;
+        if(value>product.stock + (orders[product.name]||0)){ alert("Stoktan fazla ürün giremezsiniz!"); e.target.value=orders[product.name]||"0"; return; }
+        if(value>0){ orders[product.name]=value; product.stock = 100 - value; } 
+        else { delete orders[product.name]; product.stock = 100; }
+        updateStocks();
+        renderCart();
+        e.target.value=value.toString();
+    });
+
+    item.appendChild(infoDiv);
+    item.appendChild(input);
+    productList.appendChild(item);
+}
+
+function renderProducts(filter=""){
+    productList.innerHTML="";
+    products.forEach(p=>{
+        if(p.name.toLowerCase().includes(filter.toLowerCase())){
+            createProductItem(p);
+        }
+    });
+    const totalStock = products.reduce((a,b)=>a + b.stock,0);
+    listInfo.textContent = `${products.length} çeşit ürün, ${totalStock.toLocaleString('tr-TR')} adet stokta`;
+}
+
+function renderCart(){
+    cartItems.innerHTML="";
+    let total = 0;
+    for(const [name,qty] of Object.entries(orders)){
+        const div = document.createElement("div");
+        div.className="cart-item";
+        div.textContent=`${name}: ${qty}`;
+        cartItems.appendChild(div);
+        total+=qty;
+    }
+    totalDisplay.textContent=`Sipariş Toplamı: ${total.toLocaleString('tr-TR')}`;
+    orderInfo.textContent=`${Object.keys(orders).length} çeşit sipariş`;
+    document.getElementById("cartTotalInfo").textContent=`Toplam: ${total.toLocaleString('tr-TR')} adet | ${Object.keys(orders).length} çeşit`;
+}
+
+function updateStocks(){
+    document.querySelectorAll(".list-item").forEach(item=>{
+        const name = item.querySelector(".product-name").textContent;
+        const stockSpan = item.querySelector(".stock");
+        const p = products.find(p=>p.name===name);
+        stockSpan.textContent=` (Stok: ${p.stock})`;
+    });
+}
+
+searchInput.addEventListener("input", ()=> renderProducts(searchInput.value));
+clearBtn.addEventListener("click", ()=>{
+    orders={};
+    products.forEach(p=>p.stock=100);
+    renderProducts();
+    renderCart();
+});
+cartBtn.addEventListener("click", ()=>{ cartModal.classList.add("active"); cartOverlay.classList.add("active"); });
+closeCartBtn.addEventListener("click", ()=>{ cartModal.classList.remove("active"); cartOverlay.classList.remove("active"); });
+cartOverlay.addEventListener("click", ()=>{ cartModal.classList.remove("active"); cartOverlay.classList.remove("active"); });
+
+adminBtn.addEventListener("click", ()=>{ adminModal.classList.add("active"); adminOverlay.classList.add("active"); });
+closeAdminBtn.addEventListener("click", ()=>{ adminModal.classList.remove("active"); adminOverlay.classList.remove("active"); });
+adminOverlay.addEventListener("click", ()=>{ adminModal.classList.remove("active"); adminOverlay.classList.remove("active"); });
+adminLoginBtn.addEventListener("click", ()=>{
+    if(adminPasswordInput.value === adminPass){ showAdminPanel(); }
+    else alert("Şifre yanlış!");
+});
+
+function showAdminPanel(){
+    adminBody.innerHTML = `
+        <label>Toplu Stok Güncelle:</label>
+        <input type="number" id="bulkStockInput" placeholder="Tüm ürün stokunu girin" min="0">
+        <button id="updateAllStockBtn">Güncelle</button>
+        <hr>
+        <label>Ürün Ekle / Güncelle / Sil:</label>
+        <input type="text" id="adminProductName" placeholder="Ürün adı">
+        <input type="number" id="adminProductStock" placeholder="Stok" min="0" max="100">
+        <button id="addProductBtn">Ekle / Güncelle</button>
+        <button id="deleteProductBtn">Sil</button>
+        <label>Şifre Değiştir:</label>
+        <input type="password" id="newAdminPass" placeholder="Yeni şifre">
+        <button id="changePassBtn">Şifreyi Değiştir</button>
+    `;
+    document.getElementById("updateAllStockBtn").addEventListener("click", ()=>{
+        const val = parseInt(document.getElementById("bulkStockInput").value)||0;
+        products.forEach(p=>p.stock=val);
+        alert("Tüm ürün stokları güncellendi!");
+        renderProducts();
+    });
+    document.getElementById("addProductBtn").addEventListener("click", ()=>{
+        const name= document.getElementById("adminProductName").value.trim();
+        let stock = parseInt(document.getElementById("adminProductStock").value)||100;
+        if(!name){ alert("Ürün adı gerekli"); return; }
+        let existing = products.find(p=>p.name===name);
+        if(existing){ existing.stock=stock; alert("Ürün güncellendi"); }
+        else{ products.push({name, stock}); alert("Ürün eklendi"); }
+        renderProducts();
+        showAdminPanel();});
+
+    document.getElementById("deleteProductBtn").addEventListener("click", ()=>{
+        const name = document.getElementById("adminProductName").value.trim();
+        if(!name){ alert("Ürün adı gerekli"); return; }
+        products = products.filter(p=>p.name!==name);
+        delete orders[name];
+        renderProducts();
+        renderCart();
+        alert("Ürün silindi");
+        showAdminPanel();
+    });
+
+    document.getElementById("changePassBtn").addEventListener("click", ()=>{
+        const newPass = document.getElementById("newAdminPass").value.trim();
+        if(!newPass){ alert("Yeni şifre boş olamaz"); return; }
+        adminPass = newPass;
+        alert("Şifre değiştirildi");
+    });
+}
+
+// Sipariş metni oluşturma
+function generateOrderText(){
+    if(Object.keys(orders).length === 0) return "";
+    let text = "Merhaba! Yeni siparişim aşağıdaki ürünlerden oluşuyor:\n\n";
+    for(const [name, qty] of Object.entries(orders)){
+        text += `${name}: ${qty} adet\n`;
+    }
+    const totalItems = Object.values(orders).reduce((a,b)=>a+b,0);
+    text += `\nToplam ${Object.keys(orders).length} çeşit, ${totalItems.toLocaleString('tr-TR')} ürün.\n\nTeşekkürler.`;
+    return text;
+}
+
+// WhatsApp
+whatsappBtn.addEventListener("click", ()=>{
+    if(Object.keys(orders).length===0){ alert("Sepet boş!"); return; }
+    const phone="+905053950685";
+    const text = encodeURIComponent(generateOrderText());
+    window.open(`https://wa.me/${phone.replace(/\D/g,'')}?text=${text}`, "_blank");
+});
+
+// Messenger
+messengerBtn.addEventListener("click", ()=>{
+    if(Object.keys(orders).length===0){ alert("Sepet boş!"); return; }
+    const messengerUser="askdamlacigi";
+    const text = encodeURIComponent(generateOrderText());
+    window.open(`https://m.me/${messengerUser}?ref=${text}`, "_blank");
+});
+
+// Kopyala
+copyBtn.addEventListener("click", ()=>{
+    const text = generateOrderText();
+    if(!text){ alert("Sepet boş!"); return; }
+    navigator.clipboard.writeText(text).then(()=>{
+        alert("Sipariş metni kopyalandı!");
+    });
+});
+
+// İlk render
+renderProducts();
+renderCart();
+</script>
+</body>
+</html>
